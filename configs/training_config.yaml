@@ -1,0 +1,92 @@
+# Training Configuration for Custom Handwriting OCR
+
+# Model Architecture
+model:
+  type: "vit_transformer"  # Vision Transformer + Transformer Decoder
+  vit_config:
+    image_size: 224
+    patch_size: 16
+    num_classes: 1000
+    dim: 768
+    depth: 12
+    heads: 12
+    mlp_dim: 3072
+    dropout: 0.1
+  
+  decoder_config:
+    vocab_size: 5000  # Will be updated based on your character set
+    max_position_embeddings: 512
+    hidden_size: 768
+    num_hidden_layers: 6
+    num_attention_heads: 12
+    intermediate_size: 3072
+    dropout: 0.1
+
+# Training Parameters
+training:
+  batch_size: 8
+  learning_rate: 1e-4
+  weight_decay: 0.01
+  num_epochs: 100
+  warmup_steps: 1000
+  gradient_accumulation_steps: 4
+  
+  # Learning rate scheduling
+  scheduler:
+    type: "cosine"
+    warmup_ratio: 0.1
+    min_lr: 1e-6
+  
+  # Early stopping
+  early_stopping:
+    patience: 10
+    min_delta: 0.001
+
+# Data Configuration
+data:
+  train_split: 0.8
+  val_split: 0.2
+  max_text_length: 200
+  image_height: 224
+  image_width: 224
+  
+  # Augmentation
+  augmentation:
+    rotation_range: 5
+    width_shift_range: 0.1
+    height_shift_range: 0.1
+    zoom_range: 0.1
+    brightness_range: [0.8, 1.2]
+    contrast_range: [0.8, 1.2]
+
+# Hardware Configuration
+hardware:
+  device: "auto"  # auto, cpu, cuda, mps
+  num_workers: 4
+  pin_memory: true
+  mixed_precision: true
+
+# Logging and Checkpoints
+logging:
+  log_dir: "logs"
+  save_dir: "models"
+  save_frequency: 5  # Save every N epochs
+  log_frequency: 100  # Log every N steps
+  
+  # TensorBoard
+  tensorboard: true
+  wandb: false  # Set to true if using Weights & Biases
+
+# Evaluation
+evaluation:
+  metrics: ["cer", "wer", "accuracy"]  # Character Error Rate, Word Error Rate
+  eval_frequency: 1  # Evaluate every N epochs
+  save_best: true
+
+# Character Set (will be auto-generated from your data)
+charset:
+  include_numbers: true
+  include_punctuation: true
+  include_uppercase: true
+  include_lowercase: true
+  custom_chars: ""  # Add any special characters you use

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Handwriting Data Collector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        #image-container {
+            position: relative;
+            cursor: crosshair;
+            user-select: none;
+            overflow: hidden;
+        }
+        #image-to-crop {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .crop-box {
+            position: absolute;
+            border: 2px dashed #3B82F6;
+            background-color: rgba(59, 130, 246, 0.2);
+        }
+        .labeled-box {
+            position: absolute;
+            border: 2px solid #22C55E;
+            background-color: rgba(34, 197, 94, 0.2);
+            pointer-events: none; /* Allows click-through to the image below */
+        }
+        .message-box {
+            transition: opacity 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 p-4 sm:p-8">
+
+    <!-- Main Container -->
+    <div class="flex flex-col md:flex-row h-screen max-h-[95vh] gap-4">
+        
+        <!-- Left Panel: Image Display -->
+        <div class="flex-1 bg-white rounded-3xl shadow-2xl p-6 sm:p-10 border border-gray-200 flex flex-col items-center justify-center relative overflow-hidden">
+            <!-- Header for image panel -->
+            <header class="text-center mb-4 md:mb-8 w-full">
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-blue-800 tracking-tight">Image View</h1>
+                <p class="mt-1 text-md text-gray-600">Click and drag to crop a word.</p>
+            </header>
+            
+            <!-- Image Container -->
+            <div id="image-container" class="relative w-full h-full bg-gray-100 rounded-lg shadow-inner flex justify-center items-center overflow-hidden border border-gray-300">
+                <img id="image-to-crop" src="https://placehold.co/800x600/E5E7EB/4B5563?text=Upload+images" alt="Upload images to start" class="rounded-lg max-w-full h-auto">
+                <div id="image-overlay" class="absolute inset-0"></div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Controls and Data Display -->
+        <div class="flex-1 max-w-lg mx-auto md:w-1/3 bg-white rounded-3xl shadow-2xl p-6 sm:p-8 border border-gray-200 overflow-y-auto">
+            
+            <header class="text-center mb-6">
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-green-700 tracking-tight">Data & Labels</h2>
+            </header>
+
+            <!-- File Input -->
+            <div class="mb-6">
+                <label for="image-upload" class="block text-xl font-medium text-gray-700 mb-2">1. Upload your images</label>
+                <input type="file" id="image-upload" accept="image/*" multiple class="w-full text-lg px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ease-in-out cursor-pointer text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            </div>
+
+            <!-- Image Selection -->
+            <div id="image-select-container" class="mb-6 hidden">
+                <label for="image-select" class="block text-xl font-medium text-gray-700 mb-2">2. Select an image</label>
+                <select id="image-select" class="w-full p-3 text-lg border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ease-in-out"></select>
+            </div>
+
+            <!-- Label and Action Area -->
+            <div id="label-area" class="hidden space-y-4">
+                <div class="mb-4">
+                    <label for="label-input" class="block text-xl font-medium text-gray-700 mb-2">3. What does the cropped box say?</label>
+                    <input type="text" id="label-input" placeholder="Type the character or word here..." class="w-full p-4 text-lg border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ease-in-out">
+                </div>
+                <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                    <button id="save-button" class="flex-1 py-4 px-6 text-xl font-semibold rounded-lg shadow-lg transform transition-all duration-200 ease-in-out bg-green-600 text-white hover:bg-green-700 hover:scale-105" disabled>
+                        Save Crop & Label
+                    </button>
+                    <button id="undo-button" class="flex-1 py-4 px-6 text-xl font-semibold rounded-lg shadow-lg transform transition-all duration-200 ease-in-out bg-yellow-500 text-white hover:bg-yellow-600 hover:scale-105">
+                        Undo Last
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Message Box for Success/Error -->
+            <div id="message-box" class="mt-4 p-4 rounded-lg hidden message-box"></div>
+
+            <!-- Save to Server Button -->
+            <button id="save-server-button" class="mt-6 w-full py-4 px-6 text-xl font-semibold rounded-lg shadow-lg transform transition-all duration-200 ease-in-out bg-blue-600 text-white hover:bg-blue-700 hover:scale-105" disabled>
+                4. Save Dataset to Server
+            </button>
+            
+            <!-- List of labeled data -->
+            <div class="mt-8">
+                <h3 class="text-xl font-medium text-gray-700 mb-3">Labeled Items</h3>
+                <div id="labeled-items-list" class="space-y-2 text-sm text-gray-500">
+                    <p class="text-gray-400">Your labeled data will appear here.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript for Cropping and Data Handling -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const imageUpload = document.getElementById('image-upload');
+            const imageContainer = document.getElementById('image-container');
+            const imageToCrop = document.getElementById('image-to-crop');
+            const imageOverlay = document.getElementById('image-overlay');
+            const imageSelectContainer = document.getElementById('image-select-container');
+            const imageSelect = document.getElementById('image-select');
+            const labelArea = document.getElementById('label-area');
+            const labelInput = document.getElementById('label-input');
+            const saveButton = document.getElementById('save-button');
+            const undoButton = document.getElementById('undo-button');
+            const saveServerButton = document.getElementById('save-server-button');
+            const messageBox = document.getElementById('message-box');
+            const labeledItemsList = document.getElementById('labeled-items-list');
+
+            let images = [];
+            let dataSet = {};
+            let startX, startY;
+            let currentCropBox = null;
+            let isDrawing = false;
+            let currentImageId = null;
+            
+            /**
+             * Displays a message to the user in the message box.
+             * @param {string} message The message to display.
+             * @param {string} type The type of message ('success' or 'error').
+             */
+            const showMessage = (message, type) => {
+                messageBox.textContent = message;
+                messageBox.classList.remove('hidden', 'bg-green-100', 'text-green-700', 'bg-red-100', 'text-red-700');
+                if (type === 'success') {
+                    messageBox.classList.add('bg-green-100', 'text-green-700');
+                } else if (type === 'error') {
+                    messageBox.classList.add('bg-red-100', 'text-red-700');
+                }
+                setTimeout(() => {
+                    messageBox.classList.add('hidden');
+                }, 5000);
+            };
+
+            const renderLabeledBoxes = (imageId) => {
+                // Clear any existing labeled boxes
+                imageOverlay.innerHTML = '';
+                if (dataSet[imageId]) {
+                    dataSet[imageId].forEach(item => {
+                        const box = document.createElement('div');
+                        box.classList.add('labeled-box');
+                        box.style.left = `${item.x}px`;
+                        box.style.top = `${item.y}px`;
+                        box.style.width = `${item.width}px`;
+                        box.style.height = `${item.height}px`;
+                        imageOverlay.appendChild(box);
+                    });
+                }
+            };
+            
+            const renderLabeledItemsList = (imageId) => {
+                labeledItemsList.innerHTML = '';
+                if (dataSet[imageId] && dataSet[imageId].length > 0) {
+                    dataSet[imageId].forEach((item, index) => {
+                        const listItem = document.createElement('div');
+                        listItem.classList.add('p-2', 'bg-gray-100', 'rounded-md', 'border', 'border-gray-200');
+                        listItem.innerHTML = `<span class="font-semibold text-gray-800">${item.label}</span>`;
+                        labeledItemsList.appendChild(listItem);
+                    });
+                } else {
+                    labeledItemsList.innerHTML = '<p class="text-gray-400">No labeled data for this image yet.</p>';
+                }
+            };
+
+            const switchImage = (imageId) => {
+                const selectedImage = images.find(img => img.id === imageId);
+                if (selectedImage) {
+                    currentImageId = imageId;
+                    imageToCrop.src = selectedImage.src;
+                    imageToCrop.onload = () => {
+                        renderLabeledBoxes(currentImageId);
+                        renderLabeledItemsList(currentImageId);
+                    };
+                    labelArea.classList.add('hidden');
+                    if (currentCropBox) {
+                        currentCropBox.remove();
+                        currentCropBox = null;
+                    }
+                    imageToCrop.style.display = 'block';
+                }
+            };
+
+            imageUpload.addEventListener('change', (event) => {
+                const files = event.target.files;
+                if (files.length === 0) return;
+
+                images = [];
+                dataSet = {};
+                imageSelect.innerHTML = '';
+                
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const reader = new FileReader();
+                    const imageId = `image-${Date.now()}-${i}`;
+                    
+                    reader.onload = (e) => {
+                        images.push({ id: imageId, src: e.target.result, file: file });
+                        dataSet[imageId] = [];
+                        const option = document.createElement('option');
+                        option.value = imageId;
+                        option.textContent = file.name;
+                        imageSelect.appendChild(option);
+                        if (i === 0) {
+                            switchImage(imageId);
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+
+                imageSelectContainer.classList.remove('hidden');
+                saveServerButton.disabled = false;
+            });
+            
+            imageSelect.addEventListener('change', (event) => {
+                switchImage(event.target.value);
+            });
+
+            // Start drawing the crop box
+            imageContainer.addEventListener('mousedown', (e) => {
+                if (!currentImageId || e.target.id !== 'image-to-crop') {
+                    return;
+                }
+                isDrawing = true;
+                if (currentCropBox) {
+                    currentCropBox.remove();
+                    currentCropBox = null;
+                }
+                labelArea.classList.add('hidden');
+                
+                const rect = imageToCrop.getBoundingClientRect();
+                
+                startX = e.clientX - rect.left;
+                startY = e.clientY - rect.top;
+                
+                currentCropBox = document.createElement('div');
+                currentCropBox.classList.add('crop-box');
+                imageOverlay.appendChild(currentCropBox);
+
+                currentCropBox.style.left = `${startX}px`;
+                currentCropBox.style.top = `${startY}px`;
+                currentCropBox.style.width = '0px';
+                currentCropBox.style.height = '0px';
+                labelInput.value = '';
+                saveButton.disabled = true;
+            });
+
+            // Update the crop box as the user drags
+            imageContainer.addEventListener('mousemove', (e) => {
+                if (!isDrawing) {
+                    return;
+                }
+                
+                const rect = imageToCrop.getBoundingClientRect();
+                const currentX = e.clientX - rect.left;
+                const currentY = e.clientY - rect.top;
+
+                const width = currentX - startX;
+                const height = currentY - startY;
+
+                currentCropBox.style.left = `${Math.min(currentX, startX)}px`;
+                currentCropBox.style.top = `${Math.min(currentY, startY)}px`;
+                currentCropBox.style.width = `${Math.abs(width)}px`;
+                currentCropBox.style.height = `${Math.abs(height)}px`;
+            });
+
+            // Stop drawing and prepare for labeling
+            imageContainer.addEventListener('mouseup', () => {
+                isDrawing = false;
+                if (!currentCropBox || currentCropBox.offsetWidth < 5 || currentCropBox.offsetHeight < 5) {
+                    if (currentCropBox) {
+                        currentCropBox.remove();
+                        currentCropBox = null;
+                    }
+                    return;
+                }
+                labelArea.classList.remove('hidden');
+                labelInput.focus();
+            });
+            
+            // Save the cropped data
+            saveButton.addEventListener('click', async () => {
+                const label = labelInput.value.trim();
+                if (!label || !currentCropBox) {
+                    showMessage('Please enter a label for the cropped area.', 'error');
+                    return;
+                }
+                
+                const rect = imageToCrop.getBoundingClientRect();
+                const scaleX = imageToCrop.naturalWidth / rect.width;
+                const scaleY = imageToCrop.naturalHeight / rect.height;
+
+                const x = currentCropBox.offsetLeft * scaleX;
+                const y = currentCropBox.offsetTop * scaleY;
+                const width = currentCropBox.offsetWidth * scaleX;
+                const height = currentCropBox.offsetHeight * scaleY;
+
+                // Create a canvas to get the cropped image as data URL
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(imageToCrop, x, y, width, height, 0, 0, width, height);
+
+                const dataUrl = canvas.toDataURL('image/png');
+
+                const newCrop = {
+                    label: label,
+                    x: currentCropBox.offsetLeft,
+                    y: currentCropBox.offsetTop,
+                    width: currentCropBox.offsetWidth,
+                    height: currentCropBox.offsetHeight,
+                    dataUrl: dataUrl
+                };
+
+                if (!dataSet[currentImageId]) {
+                    dataSet[currentImageId] = [];
+                }
+                dataSet[currentImageId].push(newCrop);
+
+                // Update UI
+                renderLabeledBoxes(currentImageId);
+                renderLabeledItemsList(currentImageId);
+                
+                currentCropBox.remove();
+                currentCropBox = null;
+                labelInput.value = '';
+                labelArea.classList.add('hidden');
+                showMessage(`Saved: "${label}". Total for this image: ${dataSet[currentImageId].length}`, 'success');
+            });
+
+            // Enable save button when label is typed
+            labelInput.addEventListener('input', () => {
+                saveButton.disabled = labelInput.value.trim().length === 0;
+            });
+            
+            // Undo the last saved crop
+            undoButton.addEventListener('click', () => {
+                if (dataSet[currentImageId] && dataSet[currentImageId].length > 0) {
+                    dataSet[currentImageId].pop();
+                    renderLabeledBoxes(currentImageId);
+                    renderLabeledItemsList(currentImageId);
+                    showMessage('Undid last saved crop.', 'success');
+                } else {
+                    showMessage('No crops to undo for this image.', 'error');
+                }
+            });
+
+            // Save dataset to server
+            saveServerButton.addEventListener('click', async () => {
+                const totalItems = Object.values(dataSet).flat().length;
+                if (totalItems === 0) {
+                    showMessage('Please save some crops first!', 'error');
+                    return;
+                }
+                
+                showMessage('Saving dataset to server...', 'success');
+                saveServerButton.disabled = true;
+                saveServerButton.textContent = 'Saving...';
+
+                try {
+                    // Convert the dataSet object to the format expected by the server
+                    const flatDataset = [];
+                    for (const imageId in dataSet) {
+                        dataSet[imageId].forEach(item => {
+                            flatDataset.push({
+                                label: item.label,
+                                dataUrl: item.dataUrl
+                            });
+                        });
+                    }
+
+                    const response = await fetch('/api/process-dataset', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ dataset: flatDataset })
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        showMessage(`Dataset saved! ${result.total_samples} samples stored at: ${result.dataset_path}`, 'success');
+                        // Clear the dataset after successful save
+                        dataSet = {};
+                        saveServerButton.disabled = true;
+                        saveServerButton.textContent = '4. Save Dataset to Server';
+                    } else {
+                        showMessage(`Error: ${result.error}`, 'error');
+                        saveServerButton.disabled = false;
+                        saveServerButton.textContent = '4. Save Dataset to Server';
+                    }
+                } catch (error) {
+                    showMessage(`Network error: ${error.message}`, 'error');
+                    saveServerButton.disabled = false;
+                    saveServerButton.textContent = '4. Save Dataset to Server';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
