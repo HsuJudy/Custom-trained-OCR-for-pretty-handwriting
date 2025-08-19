@@ -55,9 +55,15 @@
             </header>
             
             <!-- Image Container -->
-            <div id="image-container" class="relative w-full h-full bg-gray-100 rounded-lg shadow-inner flex justify-center items-center overflow-hidden border border-gray-300">
+            <div id="image-container" class="relative w-full h-full bg-gray-100 rounded-lg shadow-inner flex justify-center items-center overflow-hidden border border-gray-300" 
+                 ondrop="handleDrop(event)" 
+                 ondragover="handleDragOver(event)" 
+                 ondragleave="handleDragLeave(event)">
                 <img id="image-to-crop" src="https://placehold.co/800x600/E5E7EB/4B5563?text=Upload+images" alt="Upload images to start" class="rounded-lg max-w-full h-auto">
                 <div id="image-overlay" class="absolute inset-0"></div>
+                <div id="drop-zone" class="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-0 transition-all duration-200 pointer-events-none">
+                    <div class="text-white text-xl font-semibold">Drop folder here</div>
+                </div>
             </div>
         </div>
 
@@ -71,7 +77,8 @@
             <!-- File Input -->
             <div class="mb-6">
                 <label for="image-upload" class="block text-xl font-medium text-gray-700 mb-2">1. Upload your images</label>
-                <input type="file" id="image-upload" accept="image/*" multiple class="w-full text-lg px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ease-in-out cursor-pointer text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                <input type="file" id="image-upload" accept="image/*" multiple webkitdirectory directory class="w-full text-lg px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ease-in-out cursor-pointer text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                <p class="text-sm text-gray-500 mt-2">You can select individual files or drop an entire folder</p>
             </div>
 
             <!-- Image Selection -->
@@ -130,6 +137,7 @@
             const saveServerButton = document.getElementById('save-server-button');
             const messageBox = document.getElementById('message-box');
             const labeledItemsList = document.getElementById('labeled-items-list');
+            const dropZone = document.getElementById('drop-zone');
 
             let images = [];
             let dataSet = {};
@@ -137,6 +145,97 @@
             let currentCropBox = null;
             let isDrawing = false;
             let currentImageId = null;
+
+            // Drag and drop functions
+            function handleDragOver(event) {
+                event.preventDefault();
+                dropZone.style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
+                dropZone.style.pointerEvents = 'auto';
+            }
+
+            function handleDragLeave(event) {
+                event.preventDefault();
+                dropZone.style.backgroundColor = 'rgba(59, 130, 246, 0)';
+                dropZone.style.pointerEvents = 'none';
+            }
+
+            function handleDrop(event) {
+                event.preventDefault();
+                dropZone.style.backgroundColor = 'rgba(59, 130, 246, 0)';
+                dropZone.style.pointerEvents = 'none';
+                
+                const items = event.dataTransfer.items;
+                if (items) {
+                    handleItems(items);
+                }
+            }
+
+            async function handleItems(items) {
+                const files = [];
+                
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.kind === 'file') {
+                        const entry = item.webkitGetAsEntry();
+                        if (entry) {
+                            await processEntry(entry, files);
+                        }
+                    }
+                }
+                
+                if (files.length > 0) {
+                    processFiles(files);
+                }
+            }
+
+            async function processEntry(entry, files) {
+                if (entry.isFile) {
+                    const file = await new Promise((resolve) => {
+                        entry.file(resolve);
+                    });
+                    
+                    if (file.type.startsWith('image/')) {
+                        files.push(file);
+                    }
+                } else if (entry.isDirectory) {
+                    const reader = entry.createReader();
+                    const entries = await new Promise((resolve) => {
+                        reader.readEntries(resolve);
+                    });
+                    
+                    for (const childEntry of entries) {
+                        await processEntry(childEntry, files);
+                    }
+                }
+            }
+
+            function processFiles(files) {
+                images = [];
+                dataSet = {};
+                imageSelect.innerHTML = '';
+                
+                files.forEach((file, i) => {
+                    const reader = new FileReader();
+                    const imageId = `image-${Date.now()}-${i}`;
+                    
+                    reader.onload = (e) => {
+                        images.push({ id: imageId, src: e.target.result, file: file });
+                        dataSet[imageId] = [];
+                        const option = document.createElement('option');
+                        option.value = imageId;
+                        option.textContent = file.webkitRelativePath || file.name;
+                        imageSelect.appendChild(option);
+                        if (i === 0) {
+                            switchImage(imageId);
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                });
+
+                imageSelectContainer.classList.remove('hidden');
+                saveServerButton.disabled = false;
+                showMessage(`Loaded ${files.length} images from folder`, 'success');
+            }
             
             /**
              * Displays a message to the user in the message box.
@@ -208,31 +307,7 @@
                 const files = event.target.files;
                 if (files.length === 0) return;
 
-                images = [];
-                dataSet = {};
-                imageSelect.innerHTML = '';
-                
-                for (let i = 0; i < files.length; i++) {
-                    const file = files[i];
-                    const reader = new FileReader();
-                    const imageId = `image-${Date.now()}-${i}`;
-                    
-                    reader.onload = (e) => {
-                        images.push({ id: imageId, src: e.target.result, file: file });
-                        dataSet[imageId] = [];
-                        const option = document.createElement('option');
-                        option.value = imageId;
-                        option.textContent = file.name;
-                        imageSelect.appendChild(option);
-                        if (i === 0) {
-                            switchImage(imageId);
-                        }
-                    };
-                    reader.readAsDataURL(file);
-                }
-
-                imageSelectContainer.classList.remove('hidden');
-                saveServerButton.disabled = false;
+                processFiles(Array.from(files));
             });
             
             imageSelect.addEventListener('change', (event) => {
