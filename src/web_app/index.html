@@ -258,7 +258,7 @@
             const renderLabeledBoxes = (imageId) => {
                 // Clear any existing labeled boxes
                 imageOverlay.innerHTML = '';
-                if (dataSet[imageId]) {
+                if (dataSet[imageId] && dataSet[imageId].length > 0) {
                     dataSet[imageId].forEach(item => {
                         const box = document.createElement('div');
                         box.classList.add('labeled-box');
@@ -268,6 +268,12 @@
                         box.style.height = `${item.height}px`;
                         imageOverlay.appendChild(box);
                     });
+                    
+                    // Enable save button if we have crops
+                    saveServerButton.disabled = false;
+                } else {
+                    // Disable save button if no crops
+                    saveServerButton.disabled = true;
                 }
             };
             
@@ -416,6 +422,9 @@
                 }
                 dataSet[currentImageId].push(newCrop);
 
+                console.log('Saved crop:', newCrop);
+                console.log('Current dataset:', dataSet);
+
                 // Update UI
                 renderLabeledBoxes(currentImageId);
                 renderLabeledItemsList(currentImageId);
@@ -424,6 +433,11 @@
                 currentCropBox = null;
                 labelInput.value = '';
                 labelArea.classList.add('hidden');
+                
+                // Enable save button if we have any crops
+                const totalItems = Object.values(dataSet).flat().length;
+                saveServerButton.disabled = totalItems === 0;
+                
                 showMessage(`Saved: "${label}". Total for this image: ${dataSet[currentImageId].length}`, 'success');
             });
 
@@ -438,6 +452,11 @@
                     dataSet[currentImageId].pop();
                     renderLabeledBoxes(currentImageId);
                     renderLabeledItemsList(currentImageId);
+                    
+                    // Update save button state
+                    const totalItems = Object.values(dataSet).flat().length;
+                    saveServerButton.disabled = totalItems === 0;
+                    
                     showMessage('Undid last saved crop.', 'success');
                 } else {
                     showMessage('No crops to undo for this image.', 'error');
@@ -451,6 +470,9 @@
                     showMessage('Please save some crops first!', 'error');
                     return;
                 }
+                
+                console.log('Total items to save:', totalItems);
+                console.log('Dataset:', dataSet);
                 
                 showMessage('Saving dataset to server...', 'success');
                 saveServerButton.disabled = true;
